@@ -237,6 +237,13 @@ proxies:
   sni: iranlir.speedtrade.top
   type: trojan
   udp: true
+- cipher: aes-256-cfb
+  name: 🇱🇹 LT 86 SSS
+  password: qYEN5HX4JKeVCdEC
+  port: 9039
+  server: 195.238.126.84
+  type: ss
+  udp: true
 - alterId: 0
   cipher: auto
   name: 🇳🇱 NL 92 VMS
@@ -602,6 +609,13 @@ proxies:
   port: 989
   server: 46.183.184.60
   type: ss
+  udp: true
+- name: 🇲🇴 MO 143 TJN
+  password: 5eb5bdf9-4a70-4890-b2ca-8b2b79792639
+  port: 10443
+  server: macau.hapchung.com
+  skip-cert-verify: true
+  type: trojan
   udp: true
 - alterId: 0
   cipher: auto
