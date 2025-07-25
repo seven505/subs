@@ -10,7 +10,9 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 SOURCE_URLS = [
     "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml",
     "https://raw.githubusercontent.com/gfpcom/free-proxy-list/main/list/trojan.txt",
-    "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt"
+    "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt",
+    "https://raw.githubusercontent.com/go4sharing/sub/main/sub.yaml",
+    "https://raw.githubusercontent.com/anaer/Sub/refs/heads/main/proxies.yaml"
 ]
 
 # ✅ 允许的协议类型
