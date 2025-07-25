@@ -6,7 +6,7 @@ from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 # 参数配置
-SOURCE_URL = "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml"
+SOURCE_URL = "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml"
 OUTPUT_PATH = "output/all.yaml"
 MAX_DELAY = 500  # ms
 MIN_SPEED = 100  # KB/s
