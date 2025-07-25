@@ -9,7 +9,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 # ✅ 订阅链接列表（支持多个）
 SOURCE_URLS = [
     "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml",
-    "https://raw.githubusercontent.com/gfpcom/free-proxy-list/main/list/trojan.txt"，
+    "https://raw.githubusercontent.com/gfpcom/free-proxy-list/main/list/trojan.txt",
     "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt"
 ]
 
