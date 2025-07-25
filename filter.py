@@ -17,7 +17,7 @@ SOURCE_URLS = [
 OUTPUT_PATH = "output/all.yaml"
 
 # 筛选参数
-MAX_DELAY = 500     # 最大延迟（毫秒）
+MAX_DELAY = 1000     # 最大延迟（毫秒）
 MIN_SPEED = 100     # 最小速度（KB/s）
 
 console = Console()
