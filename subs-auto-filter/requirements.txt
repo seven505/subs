@@ -1,4 +1,0 @@
-httpx
-pyyaml
-rich
-aiofiles
