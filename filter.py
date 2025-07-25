@@ -8,7 +8,7 @@ from rich.table import Table
 # ✅ 多个订阅链接（可扩展）
 SOURCE_URLS = [
     "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml",
-    "https://raw.githubusercontent.com/mahdibland/SSAggregator/master/sub/sub_merge_yaml.yml",
+    "",
 ]
 
 # 合格协议类型
