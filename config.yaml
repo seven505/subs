@@ -13,3 +13,6 @@ speed-test-url: "http://speed.cloudflare.com/_down"
 
 sort-by: speed
 rename-format: "{emoji}{country}_{id} |{speed}|{delay}ms|{yt}|{nf}|{dplus}|{gpt}|{tk}"
+
+output_file: output/all.yaml
+log_file: logs/subscription_summary.log
