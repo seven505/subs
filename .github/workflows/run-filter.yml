@@ -1,0 +1,40 @@
+name: ⏱ Filter & Test Proxies
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 */6 * * *"  # 每 6 小时自动运行
+
+jobs:
+  run-filter:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repo
+        uses: actions/checkout@v3
+
+      - name: ⚙️ Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.11
+
+      - name: 📦 Install Dependencies
+        run: pip install pyyaml requests
+
+      - name: 📥 Download subs-check (Go版)
+        run: |
+          wget -O subs-check.zip https://github.com/sub-store-org/subs-check/releases/latest/download/subs-check-linux-amd64.zip
+          unzip subs-check.zip -d ./subs-check-bin
+          chmod +x ./subs-check-bin/subs-check
+
+      - name: 🚀 Run filter script
+        run: python3 run.py
+
+      - name: ✅ Commit & Push Output
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add output/all.yaml
+          git commit -m "🤖 Update filtered proxies"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
