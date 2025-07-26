@@ -92,8 +92,8 @@ async def test_latency(server, port, timeout_ms=3000):
 # --- 下载测速 ---
 async def test_speed(proxies, test_url, download_mb=5, timeout=15):
     try:
-        async with httpx.AsyncClient(proxies=proxies, timeout=timeout) as client:
-            r = await client.get(test_url, timeout=timeout)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            r = await client.get(test_url, timeout=timeout, proxies=proxies)
             if r.status_code == 200:
                 content = r.content[:download_mb * 1024 * 1024]
                 speed = len(content) / (1024 * 1024) / r.elapsed.total_seconds()
@@ -105,8 +105,8 @@ async def test_speed(proxies, test_url, download_mb=5, timeout=15):
 # --- 解锁检测 ---
 async def check_url(proxy, url):
     try:
-        async with httpx.AsyncClient(proxies=proxy, timeout=10, verify=False) as client:
-            r = await client.get(url)
+        async with httpx.AsyncClient(timeout=10, verify=False) as client:
+            r = await client.get(url, proxies=proxy)
             return r.status_code == 200
     except:
         return False
