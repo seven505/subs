@@ -1,15 +1,15 @@
-concurrent: 100
+subs:
+  - https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml
+  - https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt
+  - https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links1.txt
+
 timeout: 5000
+concurrent: 100
+min-speed: 1024
 download-timeout: 10
 download-mb: 10
-min-speed: 1024
-max-delay: 5000
-speed-test-url: "https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z"
-rename-format: "{emoji}{country}_{id} |{speed}|{delay}ms|YT|NF|D+|GPT|TK"
-sort-by: speed
+max-delay: 10000
+speed-test-url: http://speedtest-sgp1.digitalocean.com/1mb.test
 
-# 这里写你所有订阅地址，支持多个
-subs:
-  - "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml"
-  - "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt"
-  - "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links1.txt"
+sort-by: speed
+rename-format: "{emoji}{country}_{id} |{speed}|{delay}ms|{yt}|{nf}|{dplus}|{gpt}|{tk}"
