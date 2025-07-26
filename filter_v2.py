@@ -61,7 +61,6 @@ def parse_sub_content(text):
             proxies.append({"name": f"Line_{i+1}", "server": "", "port": 0, "type": "unknown", "raw": line})
         return proxies
 
-    # 4. 解析失败返回空
     return []
 
 # 拉取所有订阅
@@ -79,7 +78,6 @@ async def fetch_all_subs(sources):
                     console.print(f"[green]成功解析 {len(subs_proxies)} 条节点[/green]")
                 else:
                     console.print(f"[yellow]订阅无节点或格式不支持：{url}[/yellow]")
-                # 记录订阅节点数量日志
                 with open(LOGS_DIR / "subscription_summary.log", "a", encoding="utf-8") as logf:
                     logf.write(f"{url} : {len(subs_proxies)} nodes\n")
                 proxies.extend(subs_proxies)
@@ -89,12 +87,12 @@ async def fetch_all_subs(sources):
                     logf.write(f"{url} : 拉取失败 {e}\n")
     return proxies
 
-# 验证节点必要字段（可根据实际情况调整）
+# 验证节点字段完整性
 def is_valid_node(node):
     required = ["name", "server", "port", "type"]
     return all(k in node and node[k] for k in required)
 
-# 测速函数（下载测速）
+# 测速函数，修复 elapsed 未定义问题
 async def test_node_speed(node, config, semaphore):
     test_url = config["speed-test-url"]
     timeout_s = config["download-timeout"]
@@ -109,12 +107,13 @@ async def test_node_speed(node, config, semaphore):
                 resp = await client.get(test_url, timeout=timeout_s)
                 content_length = 0
                 chunk_size = 65536
+                elapsed = 0  # 确保已初始化
                 async for chunk in resp.aiter_bytes(chunk_size):
                     content_length += len(chunk)
                     elapsed = time.perf_counter() - start
                     if content_length >= download_bytes_target or elapsed >= timeout_s:
                         break
-                delay_ms = int((time.perf_counter() - start) * 1000)
+                delay_ms = int(elapsed * 1000)
                 speed_kbps = content_length / 1024 / (elapsed if elapsed > 0 else 1)
                 return {
                     "node": node,
@@ -129,7 +128,7 @@ async def test_node_speed(node, config, semaphore):
                 "speed_kbps": 0
             }
 
-# 国家Emoji识别
+# 国家 Emoji 映射
 def detect_country_emoji(name):
     flags = {
         "香港": "🇭🇰", "HK": "🇭🇰", "日本": "🇯🇵", "JP": "🇯🇵", "台湾": "🇹🇼",
@@ -140,13 +139,12 @@ def detect_country_emoji(name):
             return emoji, k
     return "🏳️", "UNK"
 
-# 重命名节点
+# 节点命名规则
 def rename_node(node, result, config, idx):
     emoji, country = detect_country_emoji(node.get("name", ""))
     speed = f"{result['speed_kbps']/1024:.1f}MB/s" if result['speed_kbps'] > 0 else "0MB/s"
     delay = f"{result['delay']}" if result['delay'] is not None else "timeout"
 
-    # 流媒体标签默认占位，后续模块更新可改这里
     yt = "YT"
     nf = "NF"
     dplus = "D+"
@@ -168,10 +166,9 @@ def rename_node(node, result, config, idx):
     node["name"] = new_name
     return node
 
+# 主流程
 async def main():
     config = load_config()
-
-    # 订阅源从配置文件读取
     sources = config.get("subs", [])
 
     all_nodes = await fetch_all_subs(sources)
@@ -204,7 +201,7 @@ async def main():
             renamed = rename_node(res["node"], res, config, idx)
             filtered.append(renamed)
 
-    # 排序
+    # 排序输出
     key = "speed_kbps" if config.get("sort-by", "speed") == "speed" else "delay"
     filtered.sort(key=lambda x: x.get(key, 0), reverse=True)
 
@@ -212,7 +209,6 @@ async def main():
         yaml.dump({"proxies": filtered}, f, allow_unicode=True)
 
     console.print(f"[green]✅ 输出 {len(filtered)} 条合格节点至 {OUTPUT_PATH}[/green]")
-
 
 if __name__ == "__main__":
     asyncio.run(main())
