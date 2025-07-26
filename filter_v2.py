@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import yaml
+import json
 import httpx
 import time
 import os
@@ -20,24 +21,47 @@ def load_config():
     with open("config.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-# 解析订阅，支持 yaml / base64 txt / json（可扩展）
+# 解析订阅，支持 yaml / base64 txt / json / 纯文本节点列表
 def parse_sub_content(text):
-    # 尝试yaml解析
+    text = text.strip()
+
+    # 1. 直接yaml解析
     try:
         data = yaml.safe_load(text)
         if isinstance(data, dict) and "proxies" in data:
             return data["proxies"]
     except Exception:
         pass
-    # 试base64解码，再解析yaml
+
+    # 2. base64解码后尝试yaml/json解析
     try:
-        decoded = base64.b64decode(text).decode()
-        data = yaml.safe_load(decoded)
-        if isinstance(data, dict) and "proxies" in data:
-            return data["proxies"]
+        decoded = base64.b64decode(text).decode(errors='ignore')
+        # 再尝试yaml
+        try:
+            data = yaml.safe_load(decoded)
+            if isinstance(data, dict) and "proxies" in data:
+                return data["proxies"]
+        except Exception:
+            pass
+        # 尝试json
+        try:
+            data = json.loads(decoded)
+            if "proxies" in data:
+                return data["proxies"]
+        except Exception:
+            pass
     except Exception:
         pass
-    console.print("[red]订阅内容解析失败，非标准yaml/base64格式[/red]")
+
+    # 3. 纯文本节点列表（ss/ssr/vmess链接行）
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    if lines:
+        proxies = []
+        for i, line in enumerate(lines):
+            proxies.append({"name": f"Line_{i+1}", "server": "", "port": 0, "type": "unknown", "raw": line})
+        return proxies
+
+    # 4. 解析失败返回空
     return []
 
 # 拉取所有订阅
@@ -49,6 +73,7 @@ async def fetch_all_subs(sources):
             try:
                 resp = await client.get(url)
                 text = resp.text.strip()
+                console.print(f"[blue]订阅内容前200字符: {text[:200]}[/blue]")
                 subs_proxies = parse_sub_content(text)
                 if subs_proxies:
                     console.print(f"[green]成功解析 {len(subs_proxies)} 条节点[/green]")
@@ -64,7 +89,7 @@ async def fetch_all_subs(sources):
                     logf.write(f"{url} : 拉取失败 {e}\n")
     return proxies
 
-# 验证节点必要字段
+# 验证节点必要字段（可根据实际情况调整）
 def is_valid_node(node):
     required = ["name", "server", "port", "type"]
     return all(k in node and node[k] for k in required)
@@ -96,7 +121,8 @@ async def test_node_speed(node, config, semaphore):
                     "delay": delay_ms,
                     "speed_kbps": speed_kbps
                 }
-        except Exception:
+        except Exception as e:
+            console.print(f"[red]测速异常: {e}[/red]")
             return {
                 "node": node,
                 "delay": None,
@@ -116,11 +142,11 @@ def detect_country_emoji(name):
 
 # 重命名节点
 def rename_node(node, result, config, idx):
-    emoji, country = detect_country_emoji(node["name"])
+    emoji, country = detect_country_emoji(node.get("name", ""))
     speed = f"{result['speed_kbps']/1024:.1f}MB/s" if result['speed_kbps'] > 0 else "0MB/s"
     delay = f"{result['delay']}" if result['delay'] is not None else "timeout"
 
-    # 流媒体标签默认全部用占位符，后续模块更新
+    # 流媒体标签默认占位，后续模块更新可改这里
     yt = "YT"
     nf = "NF"
     dplus = "D+"
@@ -145,17 +171,21 @@ def rename_node(node, result, config, idx):
 async def main():
     config = load_config()
 
-    # 订阅源从config或硬编码，演示用硬编码
-    sources = [
-        "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml",
-    ]
+    # 订阅源从配置文件读取
+    sources = config.get("subs", [])
 
     all_nodes = await fetch_all_subs(sources)
+    console.print(f"[bold blue]拉取到节点总数: {len(all_nodes)}[/bold blue]")
+
     valid_nodes = [n for n in all_nodes if is_valid_node(n)]
+    console.print(f"[bold green]结构合格节点数: {len(valid_nodes)}[/bold green]")
 
-    console.print(f"[cyan]共 {len(valid_nodes)} 个节点结构合格，开始测速...[/cyan]")
+    if not valid_nodes:
+        console.print("[red]没有符合格式的节点，退出[/red]")
+        return
 
-    semaphore = asyncio.Semaphore(config["concurrent"])
+    console.print(f"[cyan]开始测速...[/cyan]")
+    semaphore = asyncio.Semaphore(config.get("concurrent", 50))
     tasks = [test_node_speed(node, config, semaphore) for node in valid_nodes]
 
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}")) as progress:
@@ -170,18 +200,19 @@ async def main():
     for idx, res in enumerate(results, 1):
         delay = res["delay"]
         speed = res["speed_kbps"]
-        if delay is not None and delay <= config["max-delay"] and speed >= config["min-speed"]:
+        if delay is not None and delay <= config.get("max-delay", 5000) and speed >= config.get("min-speed", 1024):
             renamed = rename_node(res["node"], res, config, idx)
             filtered.append(renamed)
 
     # 排序
-    key = "speed_kbps" if config["sort-by"] == "speed" else "delay"
+    key = "speed_kbps" if config.get("sort-by", "speed") == "speed" else "delay"
     filtered.sort(key=lambda x: x.get(key, 0), reverse=True)
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
         yaml.dump({"proxies": filtered}, f, allow_unicode=True)
 
     console.print(f"[green]✅ 输出 {len(filtered)} 条合格节点至 {OUTPUT_PATH}[/green]")
+
 
 if __name__ == "__main__":
     asyncio.run(main())
