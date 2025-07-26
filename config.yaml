@@ -8,7 +8,7 @@ concurrent: 100
 min-speed: 1024
 download-timeout: 10
 download-mb: 10
-max-delay: 10000
+max-delay: 1000
 speed-test-url: http://speedtest-sgp1.digitalocean.com/1mb.test
 
 sort-by: speed
