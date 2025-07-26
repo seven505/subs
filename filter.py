@@ -3,10 +3,46 @@ import httpx
 import yaml
 import os
 import time
+from pathlib import Path
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
-# ✅ 订阅链接列表（支持多个）
+console = Console()
+
+# ----------------------------------------
+# ✅ 加载配置
+def load_config():
+    default = {
+        "concurrent": 100,
+        "timeout": 5,
+        "global_timeout": 20,
+        "max_delay": 1000,
+        "min_speed_kbps": 300,
+        "download_size_kb": 1024,
+        "test_gpt": True,
+        "test_youtube": True,
+        "test_netflix": True,
+        "test_disney": True,
+        "test_tiktok": True,
+        "rename_format": "{emoji}{country}_{id} |{speed}|{loss}|{yt}|{nf}|{d+}|{gpt}|{tk}",
+        "sort_by": "speed",
+    }
+    config_file = Path("config.yaml")
+    if not config_file.exists():
+        console.print("[bold red]未找到 config.yaml，使用默认配置[/bold red]")
+        return default
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            user_config = yaml.safe_load(f)
+        default.update(user_config)
+        console.print("[green]✔ 加载配置成功[/green]")
+        return default
+    except Exception as e:
+        console.print(f"[red]配置读取失败：{e}，使用默认配置[/red]")
+        return default
+
+# ----------------------------------------
+# ✅ 订阅地址（临时写死，也可放 config.yaml）
 SOURCE_URLS = [
     "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml",
     "https://raw.githubusercontent.com/gfpcom/free-proxy-list/main/list/trojan.txt",
@@ -15,20 +51,12 @@ SOURCE_URLS = [
     "https://raw.githubusercontent.com/anaer/Sub/refs/heads/main/proxies.yaml"
 ]
 
-# ✅ 允许的协议类型
 ALLOWED_TYPES = ["vmess", "vless", "ss", "trojan", "hysteria2", "tuic"]
-
-# ✅ 延迟筛选阈值（毫秒）
-MAX_LATENCY_MS = 1000
-
-# ✅ 输出文件路径
 OUTPUT_PATH = "output/all.yaml"
+os.makedirs("output", exist_ok=True)
 
-console = Console()
-os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-
-
-# 🚀 拉取所有订阅合并 proxies
+# ----------------------------------------
+# ✅ 拉取所有订阅
 async def fetch_all_subs():
     proxies = []
     async with httpx.AsyncClient(timeout=15) as client:
@@ -41,60 +69,116 @@ async def fetch_all_subs():
                     proxies.extend(data["proxies"])
                     console.print(f"[green]✔ 成功加载 {len(data['proxies'])} 条节点[/green]")
                 else:
-                    console.print(f"[yellow]⚠ 无 'proxies' 字段：{url}[/yellow]")
+                    console.print(f"[yellow]⚠ 无 proxies 字段：{url}[/yellow]")
             except Exception as e:
                 console.print(f"[red]❌ 拉取失败：{url} ➜ {e}[/red]")
     return proxies
 
-
-# ✅ 节点结构检查
+# ----------------------------------------
+# ✅ 检查节点结构
 def is_valid_node(node):
     required = ["name", "server", "port", "type"]
     return all(k in node and node[k] for k in required) and node["type"] in ALLOWED_TYPES
 
-
-# 🚀 测试延迟（连接 TCP 判断通不通 + 记录时间）
-async def test_latency(node, semaphore):
-    host = node["server"]
+# ----------------------------------------
+# ✅ 测速函数
+async def test_node_speed(node, config, semaphore):
+    server = node["server"]
     port = int(node["port"])
-    start = time.perf_counter()
+    delay = None
+    speed_kbps = 0
 
-    async with semaphore:
-        try:
-            reader, writer = await asyncio.wait_for(asyncio.open_connection(host, port), timeout=3)
-            latency = int((time.perf_counter() - start) * 1000)
-            writer.close()
-            await writer.wait_closed()
-            return node if latency <= MAX_LATENCY_MS else None
-        except:
-            return None
+    test_url = "http://speedtest-sgp1.digitalocean.com/1mb.test"  # 可换成国内CDN地址
 
+    try:
+        start_time = time.perf_counter()
+        async with semaphore:
+            async with httpx.AsyncClient(timeout=config["timeout"]) as client:
+                resp = await client.get(test_url)
+                elapsed = time.perf_counter() - start_time
+                size_kb = len(resp.content) / 1024
+                speed_kbps = size_kb / elapsed
+                delay = int(elapsed * 1000)
+        return {
+            "node": node,
+            "delay": delay,
+            "speed_kbps": speed_kbps,
+        }
+    except:
+        return {
+            "node": node,
+            "delay": None,
+            "speed_kbps": 0,
+        }
 
-# 🎯 主流程
+# ----------------------------------------
+# ✅ 国家 Emoji 检测
+def detect_country_emoji(name):
+    flags = {
+        "香港": "🇭🇰", "HK": "🇭🇰", "日本": "🇯🇵", "JP": "🇯🇵", "台湾": "🇹🇼",
+        "US": "🇺🇸", "美国": "🇺🇸", "SG": "🇸🇬", "新加坡": "🇸🇬", "DE": "🇩🇪",
+    }
+    for k, emoji in flags.items():
+        if k.lower() in name.lower():
+            return emoji, k
+    return "🏳️", "UNK"
+
+# ----------------------------------------
+# ✅ 自动命名函数
+def rename_node(node, result, config, idx):
+    emoji, country = detect_country_emoji(node["name"])
+    speed = f"{result['speed_kbps']/1024:.1f}MB/s" if result['speed_kbps'] > 0 else "0MB/s"
+    delay = f"{result['delay']}ms" if result['delay'] else "timeout"
+
+    yt = "YT" if True else "-"
+    nf = "NF" if False else "-"
+    dplus = "D+" if False else "-"
+    gpt = "GPT" if False else "-"
+    tk = "TK" if False else "-"
+
+    new_name = config["rename_format"].format(
+        emoji=emoji,
+        country=country,
+        id=str(idx).zfill(3),
+        speed=speed,
+        loss=delay,
+        yt=yt,
+        nf=nf,
+        dplus=dplus,
+        gpt=gpt,
+        tk=tk
+    )
+    node["name"] = new_name
+    return node
+
+# ----------------------------------------
+# ✅ 主执行流程
 async def main():
-    raw_proxies = await fetch_all_subs()
-    valid_nodes = [p for p in raw_proxies if is_valid_node(p)]
+    config = load_config()
+    all_nodes = await fetch_all_subs()
+    valid_nodes = [n for n in all_nodes if is_valid_node(n)]
 
-    console.print(f"[cyan]共 {len(valid_nodes)} 个结构合格节点，开始延迟测速...[/cyan]")
+    console.print(f"[cyan]共 {len(valid_nodes)} 个结构合格节点，开始测速...[/cyan]")
 
-    good_nodes = []
-    semaphore = asyncio.Semaphore(100)
+    semaphore = asyncio.Semaphore(config["concurrent"])
+    speed_tasks = [test_node_speed(n, config, semaphore) for n in valid_nodes]
+    results = await asyncio.gather(*speed_tasks)
 
-    with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"), transient=True) as progress:
-        task = progress.add_task("测速中...", total=len(valid_nodes))
-        tasks = [test_latency(p, semaphore) for p in valid_nodes]
-        results = await asyncio.gather(*tasks)
+    filtered = []
+    for idx, res in enumerate(results):
+        if res["delay"] and res["delay"] <= config["max_delay"] and res["speed_kbps"] >= config["min_speed_kbps"]:
+            renamed = rename_node(res["node"], res, config, idx + 1)
+            filtered.append(renamed)
 
-        for r in results:
-            if r:
-                good_nodes.append(r)
-            progress.update(task, advance=1)
+    # 排序
+    sort_key = "speed_kbps" if config["sort_by"] == "speed" else "delay"
+    filtered.sort(key=lambda x: x.get(sort_key, 999999), reverse=True)
 
-    console.print(f"[green]✅ 延迟筛选完成，保留 {len(good_nodes)} 个节点 ≤ {MAX_LATENCY_MS}ms[/green]")
-
+    # 输出 YAML 文件
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        yaml.dump({"proxies": good_nodes}, f, allow_unicode=True)
+        yaml.dump({"proxies": filtered}, f, allow_unicode=True)
 
+    console.print(f"[green]✅ 输出 {len(filtered)} 条合格节点至：{OUTPUT_PATH}[/green]")
 
 if __name__ == "__main__":
     asyncio.run(main())
