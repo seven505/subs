@@ -20,11 +20,14 @@ jobs:
       - name: 📦 Install Dependencies
         run: pip install pyyaml requests
 
-      - name: 📥 Download subs-check (Go版)
+      - name: 📥 Get latest subs-check asset URL
         run: |
-          wget -O subs-check.zip https://github.com/sub-store-org/subs-check/releases/download/v1.7.7/subs-check-linux-amd64.zip
-          unzip subs-check.zip -d ./subs-check-bin
-          chmod +x ./subs-check-bin/subs-check
+          TAG=$(curl -s https://api.github.com/repos/sub-store-org/subs-check/releases/latest | jq -r '.tag_name')
+          URL=$(curl -s https://api.github.com/repos/sub-store-org/subs-check/releases/latest | jq -r '.assets[] | select(.name|test("linux-amd64"))|.browser_download_url')
+          echo "Download URL: $URL"
+          wget -O subs-check.zip "$URL"
+          unzip subs-check.zip -d subs-check-bin
+          chmod +x subs-check-bin/subs-check
 
       - name: 🚀 Run filter script
         run: python3 run.py
