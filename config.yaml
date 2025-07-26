@@ -1,15 +1,14 @@
 concurrent: 100
-timeout: 5
-global_timeout: 20
-max_delay: 1000
-min_speed_kbps: 300
-download_size_kb: 1024
+timeout: 5000
+download-timeout: 10
+download-mb: 10
+min-speed: 1024
+max-delay: 5000
+speed-test-url: "https://github.com/AaronFeng753/Waifu2x-Extension-GUI/releases/download/v2.21.12/Waifu2x-Extension-GUI-v2.21.12-Portable.7z"
+rename-format: "{emoji}{country}_{id} |{speed}|{delay}ms|YT|NF|D+|GPT|TK"
+sort-by: speed
 
-test_gpt: true
-test_youtube: true
-test_netflix: true
-test_disney: true
-test_tiktok: true
-
-rename_format: "{emoji}{country}_{id} |{speed}|{loss}|{yt}|{nf}|{d+}|{gpt}|{tk}"
-sort_by: speed
+# 这里写你所有订阅地址，支持多个
+subs:
+  - "https://raw.githubusercontent.com/NiceVPN123/NiceVPN/main/utils/pool/output.yaml"
+  - "https://raw.githubusercontent.com/SamanGho/v2ray_collector/main/v2tel_links2.txt"
