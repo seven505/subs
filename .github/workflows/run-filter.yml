@@ -22,7 +22,7 @@ jobs:
 
       - name: 📥 Download subs-check (Go版)
         run: |
-          wget -O subs-check.zip https://github.com/sub-store-org/subs-check/releases/latest/download/subs-check-linux-amd64.zip
+          wget -O subs-check.zip https://github.com/sub-store-org/subs-check/releases/download/v1.7.7/subs-check-linux-amd64.zip
           unzip subs-check.zip -d ./subs-check-bin
           chmod +x ./subs-check-bin/subs-check
 
