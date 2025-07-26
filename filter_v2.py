@@ -4,25 +4,24 @@ import yaml
 import json
 import httpx
 import os
+import time
 from pathlib import Path
 from rich.console import Console
 
 console = Console()
-
 OUTPUT_PATH = "output/all.yaml"
 LOGS_DIR = Path("logs")
 LOGS_DIR.mkdir(exist_ok=True)
 os.makedirs("output", exist_ok=True)
 
-# 加载配置
+
 def load_config():
     with open("config.yaml", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
-# 解析订阅，支持 yaml / base64 txt / json / 纯文本节点列表
+
 def parse_sub_content(text):
     text = text.strip()
-
     try:
         data = yaml.safe_load(text)
         if isinstance(data, dict) and "proxies" in data:
@@ -51,7 +50,7 @@ def parse_sub_content(text):
     proxies = [{"name": f"Line_{i+1}", "server": "", "port": 0, "type": "unknown", "raw": line} for i, line in enumerate(lines)]
     return proxies
 
-# 拉取所有订阅
+
 async def fetch_all_subs(sources):
     proxies = []
     async with httpx.AsyncClient(timeout=30) as client:
@@ -71,12 +70,12 @@ async def fetch_all_subs(sources):
                     logf.write(f"{url} : 拉取失败 {e}\n")
     return proxies
 
-# 验证节点字段完整性
+
 def is_valid_node(node):
     required = ["name", "server", "port", "type"]
     return all(k in node and node[k] for k in required)
 
-# 国家 Emoji 映射
+
 def detect_country_emoji(name):
     flags = {
         "香港": "🇭🇰", "HK": "🇭🇰", "日本": "🇯🇵", "JP": "🇯🇵", "台湾": "🇹🇼",
@@ -87,17 +86,28 @@ def detect_country_emoji(name):
             return emoji, k
     return "🏳️", "UNK"
 
-# 节点命名规则
-def rename_node(node, config, idx):
+
+async def test_latency(server, port, timeout_ms=3000):
+    try:
+        start = time.time()
+        reader, writer = await asyncio.wait_for(asyncio.open_connection(server, port), timeout=timeout_ms / 1000)
+        writer.close()
+        await writer.wait_closed()
+        return round((time.time() - start) * 1000, 2)
+    except:
+        return None
+
+
+def rename_node(node, config, idx, delay_ms=None, unlocked=None):
     emoji, country = detect_country_emoji(node.get("name", ""))
     speed = "0MB/s"
-    delay = "0"
+    delay = f"{int(delay_ms)}ms" if delay_ms else "×"
 
-    yt = "YT"
-    nf = "NF"
-    dplus = "D+"
-    gpt = "GPT"
-    tk = "TK"
+    yt = "YT" if unlocked.get("yt") else "×"
+    nf = "NF" if unlocked.get("nf") else "×"
+    dplus = "D+" if unlocked.get("dplus") else "×"
+    gpt = "GPT" if unlocked.get("gpt") else "×"
+    tk = "TK" if unlocked.get("tk") else "×"
 
     new_name = config["rename-format"].format(
         emoji=emoji,
@@ -114,7 +124,30 @@ def rename_node(node, config, idx):
     node["name"] = new_name
     return node
 
-# 主流程
+
+async def detect_unlocks(node):
+    # 模拟结果，后续你可以接入真实探测逻辑
+    result = {"yt": True, "nf": True, "dplus": False, "gpt": True, "tk": False}
+    return result
+
+
+async def process_nodes(config, valid_nodes):
+    results = []
+    semaphore = asyncio.Semaphore(config.get("concurrent", 100))
+
+    async def process(node, idx):
+        async with semaphore:
+            delay = await test_latency(node["server"], int(node["port"]), timeout_ms=config.get("timeout", 3000))
+            if delay is None or delay > config.get("max-delay", 1000):
+                return
+            unlocked = await detect_unlocks(node)
+            renamed_node = rename_node(node, config, idx, delay_ms=delay, unlocked=unlocked)
+            results.append(renamed_node)
+
+    await asyncio.gather(*(process(node, idx) for idx, node in enumerate(valid_nodes, 1)))
+    return results
+
+
 async def main():
     config = load_config()
     sources = config.get("subs", [])
@@ -125,15 +158,13 @@ async def main():
     valid_nodes = [n for n in all_nodes if is_valid_node(n)]
     console.print(f"[bold green]结构合格节点数: {len(valid_nodes)}[/bold green]")
 
-    renamed = []
-    for idx, node in enumerate(valid_nodes, 1):
-        renamed_node = rename_node(node, config, idx)
-        renamed.append(renamed_node)
+    filtered_nodes = await process_nodes(config, valid_nodes)
+    console.print(f"[bold yellow]最终输出节点数: {len(filtered_nodes)}[/bold yellow]")
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        yaml.dump({"proxies": renamed}, f, allow_unicode=True)
+        yaml.dump({"proxies": filtered_nodes}, f, allow_unicode=True)
 
-    console.print(f"[green]✅ 输出 {len(renamed)} 条节点至 {OUTPUT_PATH}[/green]")
+    console.print(f"[green]✅ 输出至 {OUTPUT_PATH} 完成[/green]")
 
 if __name__ == "__main__":
     asyncio.run(main())
