@@ -21,7 +21,7 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run filter script
-        run: python3 filter_v2.py
+        run: python3 filter_v3.py
 
       - name: Commit filtered results
         run: |
